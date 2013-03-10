@@ -22,20 +22,24 @@ namespace SIMClear
         {
             GetInstallPaths();
             InitializeComponent();
+
+            if (String.IsNullOrEmpty(m_NSInstallPath))
+            {
+                btnReconfigure.Enabled = false;
+            }
         }
 
         private void button2_Click(object sender, EventArgs e)
         {
             foreach (DataGridViewRow row in dataGridView1.SelectedRows)
             {
-                DataRow drMsiRow = ((DataRowView)row.DataBoundItem).Row;
+                var drMsiRow = ((DataRowView)row.DataBoundItem).Row;
 
-                string strUninstall = string.Empty;
-                string strParams = string.Empty;
+                string strParams;
 
                 if (!drMsiRow.IsNull("UninstallString"))
                 {
-                    strUninstall = (string)drMsiRow["UninstallString"];
+                    var strUninstall = (string)drMsiRow["UninstallString"];
                     if (strUninstall.Contains("/I"))
                     {
                         strUninstall = strUninstall.Replace("/I", "/X");
@@ -47,8 +51,10 @@ namespace SIMClear
                     strParams = "/X" + ((Guid)drMsiRow[0]).ToString("b");
                 }
 
-                System.Diagnostics.ProcessStartInfo psInfo = new System.Diagnostics.ProcessStartInfo("msiexec.exe", strParams + " /passive RUNBYAIM=1 ");
-                psInfo.UseShellExecute = false;
+                var psInfo = new System.Diagnostics.ProcessStartInfo("msiexec.exe", strParams + " /passive RUNBYAIM=1 ")
+                    {
+                        UseShellExecute = false
+                    };
                 System.Diagnostics.Process procUninstall = System.Diagnostics.Process.Start(psInfo);
                 procUninstall.WaitForExit();
 
@@ -96,9 +102,11 @@ namespace SIMClear
                     // Hardcoded to use <ProductInstallDir>\Config\<ProductConfigFile>
                     string strCommandLine = "/configure \"" + Path.Combine((string)drMsiRow["InstallLocation"], "Config\\" + drMsiRow["ProductConfig"]) + "\"";
 
-                    System.Diagnostics.ProcessStartInfo psInfo = new System.Diagnostics.ProcessStartInfo(strAeXConfigPath, strCommandLine);
-                    psInfo.UseShellExecute = false;
-                    psInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Minimized;
+                    var psInfo = new System.Diagnostics.ProcessStartInfo(strAeXConfigPath, strCommandLine)
+                        {
+                            UseShellExecute = false,
+                            WindowStyle = System.Diagnostics.ProcessWindowStyle.Minimized
+                        };
                     System.Diagnostics.Process procUninstall = System.Diagnostics.Process.Start(psInfo);
                     procUninstall.WaitForExit();
                 }
@@ -132,8 +140,8 @@ namespace SIMClear
             int nArelliaProducts = 0;
             int nArelliaProductsPurged = 0;
 
-            XmlNode nodeProducts = docHistory.DocumentElement.SelectSingleNode("//ProductListing/products");
-            Dictionary<Guid, Version> productVersionLookup = new Dictionary<Guid, Version>();
+            var nodeProducts = docHistory.DocumentElement.SelectSingleNode("//ProductListing/products");
+            var productVersionLookup = new Dictionary<Guid, Version>();
 
             // 1st pass to determine highest installed version of all Arellia products
             foreach (XmlNode nodeProduct in nodeProducts.SelectNodes("product"))
@@ -157,8 +165,8 @@ namespace SIMClear
 
                             case Program.PurgeLevel.History:
                                 Version verProduct = new Version(int.Parse(eleProduct.GetAttribute("majorVersion")),
-                                    int.Parse(eleProduct.GetAttribute("minorVersion")),
-                                    int.Parse(eleProduct.GetAttribute("buildVersion")));
+                                                                    int.Parse(eleProduct.GetAttribute("minorVersion")),
+                                                                    int.Parse(eleProduct.GetAttribute("buildVersion")));
 
                                 Guid productGuid = new Guid(eleProduct.SelectSingleNode("productGuid").InnerText);
 
@@ -172,15 +180,12 @@ namespace SIMClear
                                 }
                                 break;
 
-                            default:
-                                break;
                         }
                     }
                 }
                 catch
                 {
                     // unable to determine product details, skip this node
-                    continue;
                 }
             }
 
@@ -206,7 +211,7 @@ namespace SIMClear
                                 int.Parse(eleProduct.GetAttribute("minorVersion")),
                                 int.Parse(eleProduct.GetAttribute("buildVersion")));
 
-                            Guid productGuid = new Guid(eleProduct.SelectSingleNode("productGuid").InnerText);
+                            var productGuid = new Guid(eleProduct.SelectSingleNode("productGuid").InnerText);
 
                             if (verProduct != productVersionLookup[productGuid])
                             {
@@ -253,22 +258,22 @@ namespace SIMClear
         /// </summary>
         private void GetInstallPaths()
         {
-            using (RegistryKey baseKey = RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, RegistryView.Registry64))
+            using (var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
             {
-                using (RegistryKey registryKey = baseKey.OpenSubKey("SOFTWARE\\Altiris\\eXpress\\Notification Server"))
+                using (var registryKey = baseKey.OpenSubKey("SOFTWARE\\Altiris\\eXpress\\Notification Server"))
                 {
-                    m_NSInstallPath = (string)registryKey.GetValue("InstallPath");
+                    if (registryKey != null) m_NSInstallPath = (string)registryKey.GetValue("InstallPath");
                 }
 
                 if (String.IsNullOrEmpty(m_NSInstallPath))
                 {
-                    MessageBox.Show(string.Format("Unable to determine where NS is installed, exiting"), "Error");
-                    Environment.Exit(-1);
+                    MessageBox.Show(string.Format("Unable to determine where NS is installed, reconfigure will be disabled"), "Cannot find NS installation directory");
+                    //Environment.Exit(-1);
                 }
 
                 using (RegistryKey registryKey = baseKey.OpenSubKey("SOFTWARE\\Altiris\\AIM"))
                 {
-                    m_SIMInstallPath = (string)registryKey.GetValue("InstallDir");
+                    if (registryKey != null) m_SIMInstallPath = (string)registryKey.GetValue("InstallDir");
                 }
 
                 if (String.IsNullOrEmpty(m_SIMInstallPath))
